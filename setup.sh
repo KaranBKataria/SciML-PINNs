@@ -9,3 +9,5 @@ source venv/bin/activate
 
 # Install all required dependencies
 pip3 install -r requirements.txt
+
+# Be sure to enable permisssions using the command: chmod u+x setup.sh
