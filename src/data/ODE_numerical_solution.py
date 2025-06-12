@@ -5,6 +5,8 @@ data.
 """
 
 # Import in the required packages and functions
+from pathlib import Path
+
 from scipy.integrate import solve_ivp
 import numpy as np
 import matplotlib.pyplot as plt
@@ -14,7 +16,7 @@ import scienceplots    # Used to make plots more scientific
 from swing_equation import swing_equation
 
 # Define absolute path to save .npz files in
-PATH: str = '/Users/karankataria/Library/CloudStorage/OneDrive-UniversityofWarwick/dissertation_code/data/'
+PATH: str = Path.home() / 'Library' / 'CloudStorage' / 'OneDrive-UniversityofWarwick'/ 'dissertation_code' / 'data'
 
 def swing_ODEs_solver(
     initial_time: float, initial_state: np.array, final_time: float, timestep: float,
@@ -40,7 +42,7 @@ def swing_ODEs_solver(
     times = numerical_solution.t
 
     if save_output_to_file:
-        np.savez(file=PATH+file_name, phase_angle=solution[0,:], angular_freq=solution[1,:], times=times)
+        np.savez(file=PATH / file_name, phase_angle=solution[0,:], angular_freq=solution[1,:], times=times)
 
     return (solution, times)
 
