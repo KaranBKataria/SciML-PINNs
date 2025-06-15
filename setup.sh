@@ -4,10 +4,8 @@
 # Create virtual enviroment to prevent clashing dependencies
 python3 -m venv venv
 
-# Create a virtual enviroment
+# Activate the virtual enviroment via running the 'activate' shell script
 source venv/bin/activate
 
-# Install all required dependencies
+# Install all required dependencies within the virtual env.
 pip3 install -r requirements.txt
-
-# Be sure to enable permisssions using the command: chmod u+x setup.sh

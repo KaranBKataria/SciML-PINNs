@@ -4,7 +4,7 @@ This enables the generation of synthetic data, which can optionally be output to
 specified location in the form of NumPy archive files (.npz). The script solves an
 initial value problem (IVP) using SciPy.
 
-Author: Karan Kataria
+Dev: Karan Kataria
 Work: MSc thesis
 Supervisor: Dr. Subhash Lakshminarayana
 """
@@ -31,8 +31,13 @@ def swing_ODEs_solver(
     ) -> tuple[np.array, np.array, np.array]:
 
     """
-    This function outputs the numerical solution and evaluation times of the system of first-
-    order ODEs, provided the initial conditions and discretisation interval.
+    This function outputs the numerical solution, the noisy dynamics and evaluation
+    times of the system of first-order ODEs, provided the initial conditions and
+    discretisation interval.
+
+    NB: The noisy dynamics are obtained by perturbing the true dynamics with bivariate
+    Gaussian noise with a zero-vector mean and a diagonal (by default isotropic) covariance
+    matrix of dimensions 2x2 over a real field.
 
         Inputs:
                 initial_time: The initial time of the ODEs
@@ -40,14 +45,21 @@ def swing_ODEs_solver(
                 final_time: The final time of the numerical solution
                 timestep: The timestep between numerical solutions
                 sigma: A covariance vector to produce a diagonal covariance matrix for Gaussian noise
-                inertia:
-                damping:
-
+                inertia: The inertia coefficient for the given generator
+                damping: The damping coefficient for the given generator
+                mechanical_power: The mechanical power being supplied to the generator (p.u.)
+                voltage_magnitude: The voltage being supplied by the generator (p.u.)
+                include_controllers: Boolean arguement to determine whether or not controllers should be included
+                voltages: The voltages of the other generators in the power system (p.u.)
+                phase_angles: The phase angles of the other generators in the power system (rad)
+                susceptances: The susceptance values between other generators and the given generator (p.u.)
                 file_name: The name of the output file (.npz)
                 save_output_to_file: A boolean expression to determine whether or not to save data
+                **kwargs: The controller coefficients (integral and proportional)
 
         Outputs:
                 solutions: The numerical solutions at each time step of the system of 1st order ODEs
+                solutions_noise: The noisy (Gaussian noise) dynamics of the numerical solutions
                 times: The evaluation times the numerical solutions were evaluated at
     """
    
@@ -59,10 +71,17 @@ def swing_ODEs_solver(
     # Define a lambda function of the RHS of the ODE system in the format required by solve_ivp i.e.
     # f(t, y) where y is the state of the ODE system
     func = lambda time, state_vec: swing_equation(
-        inertia=inertia, damping=damping, state=state_vec, mechanical_power=mechanical_power,
-        voltage_magnitude=voltage_magnitude, include_controllers=include_controllers, voltages=voltages,
-        phase_angles=phase_angles, susceptances=susceptances, **kwargs
-        )
+        inertia=inertia,
+        damping=damping,
+        state=state_vec,
+        mechanical_power=mechanical_power,
+        voltage_magnitude=voltage_magnitude,
+        include_controllers=include_controllers,
+        voltages=voltages,
+        phase_angles=phase_angles,
+        susceptances=susceptances,
+        **kwargs
+    )
 
     # Define the mesh the numerical solver will provide solutions to the system of ODEs at 
     discretisation = np.arange(start=t0, stop=tN+timestep, step=timestep)
@@ -78,13 +97,18 @@ def swing_ODEs_solver(
     num_states = solution.shape[0] 
     num_evals = solution.shape[1]
 
-    gaussian_noise = np.random.multivariate_normal(mean=np.zeros(shape=num_states), cov=sigma*sigma*np.eye(N=num_states), size=num_evals)
+    gaussian_noise = np.random.multivariate_normal(
+        mean=np.zeros(shape=num_states),
+        cov=sigma*sigma*np.eye(N=num_states),
+        size=num_evals
+    )
+
     solution_noise = solution + gaussian_noise.T
 
     # If True, save output .npz file at the specified absolute path
     if save_output_to_file:
         np.savez(
-            file=PATH / file_name,
+            file=PATH / 'numerical_solutions' / file_name,
             phase_angle=solution[0,:],
             angular_freq=solution[1,:],
             phase_angle_noisy=solution_noise[0,:],
@@ -96,50 +120,68 @@ def swing_ODEs_solver(
 
 # Test the functionality below
 if __name__ == '__main__':
+
     """
     This section defines an arbitrary test case to test the numerical solver functionality.
     """
+
     plt.style.use('science')
 
     # Set up the input arguements (these follow the paper 'Physics-Informed Neural Networks for Power Systems')
     timestep = 0.1
-    initial_time = 0
     final_time = 20.0
-
-    initial_state = np.array([0.1, 0.1])
-
     inertia = 0.2
     damping = 0.1
     mechanical_power = 0.1
     voltage = 1.0
+
     voltages = np.array([1.0])
     susceptances = np.array([0.2])
     phase_angles = np.array([0.0])
 
+    # Set up the initial conditions (these follow the paper 'Physics-Informed Neural Networks for Power Systems')
+    initial_state = np.array([0.1, 0.1])
+    initial_time = 0
+
+    # Set the covariance matrix to be isotropic 
     sigma = np.array([0.02, 0.02])
 
     # Obtain numerical solutions (true and noisy) along with times
     solution, solution_noisy, times = swing_ODEs_solver(
-        initial_time=initial_time, initial_state=initial_state, final_time=final_time, timestep=timestep, sigma=sigma,
-        inertia=inertia, damping=damping, mechanical_power=mechanical_power, voltage_magnitude=voltage, include_controllers=False,
-        voltages=voltages, phase_angles=phase_angles, susceptances=susceptances, file_name='test_run', save_output_to_file=False
+        initial_time=initial_time,
+        initial_state=initial_state,
+        final_time=final_time,
+        timestep=timestep,
+        sigma=sigma,
+        inertia=inertia,
+        damping=damping,
+        mechanical_power=mechanical_power,
+        voltage_magnitude=voltage,
+        include_controllers=True,
+        voltages=voltages,
+        phase_angles=phase_angles,
+        susceptances=susceptances,
+        file_name='test_run',
+        save_output_to_file=False,
+        controller_proportional=0.05,
+        controller_integral=0.1
     )
 
     # Plot the transient dynamics of the phase angle and angular velocity
     fig, ax = plt.subplots(1, 2)
+
     ax[0].plot(times, solution[0,:], linestyle='-.', color='red', label='True dynamics')
     ax[0].plot(times, solution_noisy[0,:], linestyle=':', color='blue', label='Noisy dynamics')
-    ax[0].legend(fontsize=12)
+    ax[0].legend(fontsize=15)
+    ax[0].grid()
+    ax[0].set_xlabel('Time (s)', fontsize=15)
+    ax[0].set_ylabel('Phase Angle $\delta$ (rad)', fontsize=15)
 
     ax[1].plot(times, solution[1,:], linestyle='-.', color='red', label='True dynamics')
     ax[1].plot(times, solution_noisy[1,:], linestyle=':', color='blue', label='Noisy dynamics')
-    ax[1].axhline(0, color='gray', linestyle='--')
-    ax[1].legend(fontsize=12)
-
-    ax[0].set_xlabel('Time (s)', fontsize=12)
-    ax[0].set_ylabel('Phase Angle $\delta$ (rad)', fontsize=12)
-
-    ax[1].set_xlabel('Time (s)', fontsize=12)
-    ax[1].set_ylabel('Angular Frequency $\dot{\delta}$ (rad/s)', fontsize=12)
+    ax[1].legend(fontsize=15)
+    ax[1].grid()
+    ax[1].set_xlabel('Time (s)', fontsize=15)
+    ax[1].set_ylabel('Angular Frequency $\dot{\delta}$ (rad/s)', fontsize=15)
 
     plt.show()

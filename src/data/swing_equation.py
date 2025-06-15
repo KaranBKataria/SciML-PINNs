@@ -3,7 +3,7 @@ This file defines the swing equations (inclusive and exclusive of controllers)
 to be used in the ODE_numerical_solution.py file for numerically solving the ODEs
 and obtaining synthetic data.
 
-Author: Karan Kataria
+Dev: Karan Kataria
 Work: MSc thesis
 Supervisor: Dr. Subhash Lakshminarayana
 """
