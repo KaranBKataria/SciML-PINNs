@@ -65,11 +65,14 @@ times = data['times']
 
 # PINN Hyperparameter constants
 LEARNING_RATE: float = 0.01
-SCHEDULER_STEP_SIZE: int = 100
+SCHEDULER_STEP_SIZE: int = 500
 SCHEDULER_FACTOR: float = 0.9
 
-EPOCHS: int = 5_000
-N_C: int = 8_000
+EPOCHS: int = 8_000
+N_C: int = 10_000
+
+PHYSICS_WEIGHT: float = 1.0
+IC_WEIGHT: float = 1.0
 
 # Obtain samples via LHS of size N_C
 LHC = qmc.LatinHypercube(d=1)
@@ -85,7 +88,7 @@ training_loss = []
 
 for epoch in tqdm(range(EPOCHS)):
     
-    phase_angle_pred = pinn.forward(data=collocation_points, initial_state=INITIAL_STATE)
+    phase_angle_pred = pinn.forward(data=collocation_points)
 
     angular_frequency_pred = torch.autograd.grad(
         outputs=phase_angle_pred,
@@ -103,16 +106,23 @@ for epoch in tqdm(range(EPOCHS)):
         retain_graph=True
     )[0]
 
-    modified_pred = modified_PINN_pred(
-        time=collocation_points,
-        initial_state=INITIAL_STATE,
-        phase_angle=phase_angle_pred,
-        angular_frequency=angular_frequency_pred
-    )
+    # physics_loss = physics_based_loss(
+    #     phase_angle=phase_angle_pred,
+    #     angular_frequency=angular_frequency_pred,
+    #     angular_acceleration=angular_acceleration_pred,
+    #     inertia=INERTIA,
+    #     damping=DAMPING,
+    #     mechanical_power=MECHANICAL_POWER,
+    #     voltage_magnitude=VOLTAGE,
+    #     voltages=VOLTAGES,
+    #     phase_angles=PHASE_ANGLES,
+    #     susceptances=SUSCEPTANCES,
+    #     include_controllers=CONTROLLERS
+    # )
 
-    physics_loss = physics_based_loss(
-        phase_angle=modified_pred[:,0][:, None],
-        angular_frequency=modified_pred[:,1][:, None],
+    loss = total_loss(
+        phase_angle=phase_angle_pred,
+        angular_frequency=angular_frequency_pred,
         angular_acceleration=angular_acceleration_pred,
         inertia=INERTIA,
         damping=DAMPING,
@@ -121,20 +131,24 @@ for epoch in tqdm(range(EPOCHS)):
         voltages=VOLTAGES,
         phase_angles=PHASE_ANGLES,
         susceptances=SUSCEPTANCES,
+        physics_weight=PHYSICS_WEIGHT,
+        IC_weight=IC_WEIGHT,
+        model=pinn,
+        initial_state=INITIAL_STATE,
         include_controllers=CONTROLLERS
     )
 
     optimiser.zero_grad()
-    physics_loss.backward()
+    loss.backward()
     optimiser.step()
     lr_scheduler.step()
-    training_loss.append(physics_loss.item())
+    training_loss.append(loss.item())
 
     if epoch % 100 == 0:
-        print(f'Training loss: {physics_loss}')
+        print(f'Training loss: {loss}')
 
 evaluation_points = torch.tensor(data=times, dtype=torch.float32, requires_grad=True)[:, None]
-phase_angle_eval = pinn(evaluation_points, INITIAL_STATE)
+phase_angle_eval = pinn(data=evaluation_points)
 
 angular_frequency_eval = torch.autograd.grad(
     outputs=phase_angle_eval,

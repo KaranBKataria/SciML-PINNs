@@ -1,8 +1,6 @@
 # Import in the required libraries and functions
 import torch
 
-from loss_functions import modified_PINN_pred
-
 class PINN(torch.nn.Module):
 
     def __init__(self):
@@ -27,7 +25,7 @@ class PINN(torch.nn.Module):
             torch.nn.Linear(10, 1, bias=False)
         )
         
-    def forward(self, data: torch.tensor, initial_state: torch.tensor) -> tuple[torch.tensor, torch.tensor]:
+    def forward(self, data: torch.tensor) -> tuple[torch.tensor, torch.tensor]:
 
         phase_angle_pred = self.PINN(data)
 

@@ -102,7 +102,7 @@ def modified_PINN_pred(
 
     return pred_modified
 
-def IC_based_loss(initial_pred: torch.tensor, initial_state: torch.tensor) -> float:
+def IC_based_loss(model, initial_state: torch.tensor) -> float:
     """
     This function defines the IC regularisation term to ensure the training
     proceedure enforces the satisfaction of the pre-specified ICs.
@@ -117,14 +117,20 @@ def IC_based_loss(initial_pred: torch.tensor, initial_state: torch.tensor) -> fl
     
     # Compute the square of the l2 norm between the PINN prediction at t=0 and the
     # initial state
-    error: float = torch.norm(intput=initial_pred - initial_state) ** 2
+    initial_phase_angle = model.forward(torch.tensor(data=np.array([0])[:, None], dtype=torch.float32))
+    initial_angular_frequency = model.forward(torch.tensor(data=np.array([0])[:, None], dtype=torch.float32))
+    
+    initial_pred = torch.cat(tensors=[initial_phase_angle, initial_angular_frequency], dim=1)
+
+    error: float = torch.norm(input=initial_pred - initial_state) ** 2
 
     return error
 
 def total_loss(
-        pred: np.array, initial_pred: np.array, ground_truth: np.array, initial_state: np.array,
-        angular_acceleration: float, physics_weight: float,
-        #IC_weight: float,
+        phase_angle: torch.tensor, angular_frequency: torch.tensor, angular_acceleration: torch.tensor,
+        inertia: torch.tensor, damping: torch.tensor, mechanical_power: torch.tensor, voltage_magnitude: torch.tensor,
+        voltages: torch.tensor, phase_angles: torch.tensor, susceptances: torch.tensor,
+        physics_weight: float, IC_weight: float, model, initial_state: torch.tensor,
         include_controllers: bool = False, **kwargs) -> float:
     """
     This function computes the total loss for a single training example, which is composed of the
@@ -146,14 +152,28 @@ def total_loss(
         Output:
                 total_loss: The total loss for a single training example 
     """
-    assert physics_weight < 0, "Regularisation penalty weights must be non-negative"
+    assert physics_weight >= 0 or IC_weight >= 0, "Regularisation penalty weights must be non-negative"
 
     # Obtain the loss values for each component
-    data_loss: float = data_loss_mse(pred, ground_truth)
-    physics_loss: float = physics_based_loss(pred, angular_acceleration, include_controllers, kwargs)
-    #IC_loss: float = IC_based_loss(initial_pred, initial_state)
+    #data_loss: float = data_loss_mse(pred, ground_truth)
+    physics_loss: float = physics_based_loss(
+        phase_angle=phase_angle,
+        angular_frequency=angular_frequency,
+        angular_acceleration=angular_acceleration,
+        inertia=inertia,
+        damping=damping,
+        mechanical_power=mechanical_power,
+        voltage_magnitude=voltage_magnitude,
+        voltages=voltages,
+        phase_angles=phase_angles,
+        susceptances=susceptances,
+        include_controllers=include_controllers,
+        kwargs=kwargs
+    )
+    
+    IC_loss: float = IC_based_loss(model=model, initial_state=initial_state)
 
     # Aggregate the components and scale by the regularisation weights
-    total_loss: float = data_loss + (physics_weight * physics_loss) #+ (IC_weight * IC_loss)
+    total_loss: float =  (physics_weight * physics_loss) + (IC_weight * IC_loss)
 
     return total_loss
