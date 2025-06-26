@@ -17,7 +17,7 @@ import numpy as np
 from scipy.stats import qmc # Import in the Quasi-Monte Carlo class 
 import scienceplots
 
-# Set random seet for reproducibility
+# Set random seed for reproducibility
 np.random.seed(2)
 
 # Set matplotlib style for professional, scientific plots
@@ -39,11 +39,11 @@ for n_sample, index in zip(range(10, 30, 5), range(0, 4)):
     samples = qmc.scale(samples, 0, 20) # Scale from a unit interval [0,1] (default) to [0,20]
  
     # Plot the LHS samples
-    ax[index][0].scatter(samples, np.zeros(n_sample), label='$N_{\mathcal{C}}$' + f'={n} (LHS)') 
+    ax[index][0].scatter(samples, np.zeros(n_sample), marker='.', label='$N_{\mathcal{C}}$' + f'={n_sample} (LHS)') 
     ax[index][0].legend(fontsize=10)
 
     # Plot the uniform random samples
-    ax[index][1].scatter(rand_samples, np.zeros(n_sample), color='red', label='$N_{\mathcal{C}}$' + f'={n} (random)') 
+    ax[index][1].scatter(rand_samples, np.zeros(n_sample), marker='.', color='red', label='$N_{\mathcal{C}}$' + f'={n_sample} (random)') 
     ax[index][1].legend(fontsize=10)
 
     # Only add x-axis label on the last row of subplots

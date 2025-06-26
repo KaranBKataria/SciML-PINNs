@@ -33,12 +33,17 @@ def data_loss_mse(pred: np.array, ground_truth: np.array) -> float:
 
     return error
 
-def physics_based_loss(pred: np.array, angular_acceleration: float, include_controllers: bool = False, **kwargs) -> float:
+def physics_based_loss(
+    phase_angle: torch.tensor, angular_frequency: torch.tensor, angular_acceleration: torch.tensor,
+    inertia: torch.tensor, damping: torch.tensor, mechanical_power: torch.tensor, voltage_magnitude: torch.tensor,
+    voltages: torch.tensor, phase_angles: torch.tensor, susceptances: torch.tensor,
+    include_controllers: bool = False, **kwargs) -> float:
     """
     This function computes the physics-based regularisation term for a single training example.
 
         Inputs:
-                pred: The (modified) prediction of the PINN
+                phase_angle: The (modified) phase angle prediction of the PINN
+                angular_frequency: The gradient of the (modified) phase angle prediction of the PINN
                 angular_acceleration: The second-order time derivative of the phase angle - obtained
                       via automatic differenciation
                 include_controllers: Boolean arguement to determine whether or not controllers should be included
@@ -48,32 +53,33 @@ def physics_based_loss(pred: np.array, angular_acceleration: float, include_cont
                 error: The physics-based loss for a single training example
     """
 
-    # Extract the phase angle and angular frequency PINN predictions
-    phase_angle = pred[0]
-    angular_frequency = pred[1]
-
     # Compute the total electrical power output generator k supplies to the grid
     total_electrical_output = 0
     for v, delta, B in zip(voltages, phase_angles, susceptances):
-        total_electrical_output += B * voltage_magnitude * v * np.sin(phase_angle - delta)
+        total_electrical_output += B * voltage_magnitude * v * torch.sin(phase_angle - delta)
     
     # Compute the cost based on whether or not PI controllers are accounted for
     if include_controllers:
         controller_proportional = kwargs['controller_proportional']
-        controller_integral = kwargs['controller_intergral']
+        controller_integral = kwargs['integral']
 
         cost: float = (inertia * angular_acceleration) + (damping - controller_proportional)\
                 * angular_frequency + total_electrical_output - (controller_integral * phase_angle) 
-
+        
+        # No **2 to prevent invoking expensive microcode in each iteration of the training
+        error: float = torch.mean(input=cost * cost)
+        return error
+    
     else:
         cost: float = (inertia * angular_acceleration) + (damping * angular_frequency) + total_electrical_output - mechanical_power 
+        
+        # No **2 to prevent invoking expensive microcode in each iteration of the training
+        error: float = torch.mean(input=cost * cost)
+        return error
 
-    # No **2 to prevent invoking expensive microcode in each iteration of the training
-    error: float = cost * cost
-
-    return error
-
-def modified_PINN_pred(time: float, initial_state: np.array, pred: np.array) -> np.array:
+def modified_PINN_pred(
+    time: torch.tensor, initial_state: torch.tensor,
+    phase_angle: torch.tensor, angular_frequency: torch.tensor,) -> torch.tensor:
     """
     This function returns the modified PINN prediction such that both the
     physics-based loss and the IC terms are satisfied simultaneously.
@@ -81,18 +87,22 @@ def modified_PINN_pred(time: float, initial_state: np.array, pred: np.array) -> 
         Inputs:
                 time: The input time into the PINN
                 initial_states: The pre-specified initial state of the system
-                pred: The (modified) prediction of the PINN
+                phase_angle: The (modified) phase angle prediction of the PINN
+                angular_frequency: The gradient of the (modified) phase angle prediction of the PINN
 
         Output:
                 pred_modified: The modified PINN prediction
     """
+
+    # Concatinate the predictions
+    pred = torch.cat([phase_angle, angular_frequency], dim=1)
 
     # Define the modified prediction 
     pred_modified = initial_state + (time * pred)
 
     return pred_modified
 
-def IC_based_loss(initial_pred: np.array, initial_state: np.array) -> float:
+def IC_based_loss(initial_pred: torch.tensor, initial_state: torch.tensor) -> float:
     """
     This function defines the IC regularisation term to ensure the training
     proceedure enforces the satisfaction of the pre-specified ICs.
@@ -107,7 +117,7 @@ def IC_based_loss(initial_pred: np.array, initial_state: np.array) -> float:
     
     # Compute the square of the l2 norm between the PINN prediction at t=0 and the
     # initial state
-    error: float = np.linalg.norm(x=initial_pred - initial_state) ** 2
+    error: float = torch.norm(intput=initial_pred - initial_state) ** 2
 
     return error
 
@@ -136,7 +146,7 @@ def total_loss(
         Output:
                 total_loss: The total loss for a single training example 
     """
-    assert physics_weight < 0 or IC_weight < 0, "Regularisation penalty weights must be non-negative"
+    assert physics_weight < 0, "Regularisation penalty weights must be non-negative"
 
     # Obtain the loss values for each component
     data_loss: float = data_loss_mse(pred, ground_truth)
