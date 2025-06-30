@@ -183,9 +183,9 @@ for file_index, FILE in enumerate(FILE_NAMES):
         retain_graph=True
     )[0]
 
-    phase_angle_eval = phase_angle_eval.detach().numpy()
-    angular_frequency_eval = angular_frequency_eval.detach().numpy()
-    evaluation_points = evaluation_points.detach().numpy()
+    phase_angle_eval = phase_angle_eval.cpu().detach().numpy()
+    angular_frequency_eval = angular_frequency_eval.cpu().detach().numpy()
+    evaluation_points = evaluation_points.cpu().detach().numpy()
 
     # testing_RMSE_phase_angle = np.sqrt(np.linalg.norm(x=phase_angle_eval - phase_angle_numerical) ** 2)
     # testing_RMSE_angular_frequency = np.sqrt(np.linalg.norm(x=angular_frequency_eval - angular_frequency_numerical) ** 2)
@@ -212,14 +212,11 @@ for file_index, FILE in enumerate(FILE_NAMES):
     axes[2].set_ylabel('Physics-based loss $\mathcal{L}_{\mathrm{physics}}$', fontsize=14)
 
     fig.tight_layout(pad=2.0)
-    plt.show()
-
-    break
-
-    # if CONTROLLERS:
-    #     torch.save(obj=pinn, f=ROOT / 'models' / 'pinn' / 'controllers' / model_name)
-    #     plt.savefig(ROOT / 'data' / 'visualisations' / 'PINN_solutions' / 'controllers' / (FILE.replace('.npz', '.pdf')), format="pdf", bbox_inches="tight")
-    # else:
-    #     torch.save(obj=pinn, f=ROOT / 'models' / 'pinn' / 'no_controllers' / model_name)
-    #     plt.savefig(ROOT / 'data' / 'visualisations' / 'PINN_solutions' / 'no_controllers' / (FILE.replace('.npz', '.pdf')), format="pdf", bbox_inches="tight")
+  
+    if CONTROLLERS:
+        torch.save(obj=pinn, f=ROOT / 'models' / 'pinn' / 'controllers' / model_name)
+        plt.savefig(ROOT / 'data' / 'visualisations' / 'PINN_solutions' / 'controllers' / (FILE.replace('.npz', '.pdf')), format="pdf", bbox_inches="tight")
+    else:
+        torch.save(obj=pinn, f=ROOT / 'models' / 'pinn' / 'no_controllers' / model_name)
+        plt.savefig(ROOT / 'data' / 'visualisations' / 'PINN_solutions' / 'no_controllers' / (FILE.replace('.npz', '.pdf')), format="pdf", bbox_inches="tight")
 
