@@ -77,31 +77,6 @@ def physics_based_loss(
         error: float = torch.mean(input=cost * cost)
         return error
 
-def modified_PINN_pred(
-    time: torch.tensor, initial_state: torch.tensor,
-    phase_angle: torch.tensor, angular_frequency: torch.tensor,) -> torch.tensor:
-    """
-    This function returns the modified PINN prediction such that both the
-    physics-based loss and the IC terms are satisfied simultaneously.
-
-        Inputs:
-                time: The input time into the PINN
-                initial_states: The pre-specified initial state of the system
-                phase_angle: The (modified) phase angle prediction of the PINN
-                angular_frequency: The gradient of the (modified) phase angle prediction of the PINN
-
-        Output:
-                pred_modified: The modified PINN prediction
-    """
-
-    # Concatinate the predictions
-    pred = torch.cat([phase_angle, angular_frequency], dim=1)
-
-    # Define the modified prediction 
-    pred_modified = initial_state + (time * pred)
-
-    return pred_modified
-
 def IC_based_loss(model, initial_state: torch.tensor) -> float:
     """
     This function defines the IC regularisation term to ensure the training
@@ -117,9 +92,17 @@ def IC_based_loss(model, initial_state: torch.tensor) -> float:
     
     # Compute the square of the l2 norm between the PINN prediction at t=0 and the
     # initial state
-    initial_phase_angle = model.forward(torch.tensor(data=np.array([0])[:, None], dtype=torch.float32))
-    initial_angular_frequency = model.forward(torch.tensor(data=np.array([0])[:, None], dtype=torch.float32))
+
+    t0 = torch.tensor(data=[[0.0]], requires_grad=True)
+    initial_phase_angle = model.forward(t0, initial_state)
     
+    initial_angular_frequency = torch.autograd.grad(
+        outputs=initial_phase_angle,
+        inputs=t0,
+        grad_outputs=torch.ones_like(initial_phase_angle),
+        create_graph=True
+    )[0]
+
     initial_pred = torch.cat(tensors=[initial_phase_angle, initial_angular_frequency], dim=1)
 
     error: float = torch.norm(input=initial_pred - initial_state) ** 2
@@ -168,7 +151,7 @@ def total_loss(
         phase_angles=phase_angles,
         susceptances=susceptances,
         include_controllers=include_controllers,
-        kwargs=kwargs
+        **kwargs
     )
     
     IC_loss: float = IC_based_loss(model=model, initial_state=initial_state)
