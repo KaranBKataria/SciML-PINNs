@@ -60,6 +60,8 @@ N_C: int = 5_000
 PHYSICS_WEIGHT: float = 1.0
 IC_WEIGHT: float = 1.0
 
+ACTIVATION: str = 'gelu'
+
 # Obtain samples via LHS of size N_C
 LHC = qmc.LatinHypercube(d=1)
 collocation_points = LHC.random(n=N_C)
@@ -93,7 +95,7 @@ for file_index, FILE in enumerate(FILE_NAMES):
     DAMPING = torch.tensor(data=float(INERTIA_DAMPING[1]))
 
     # Define PINN, optimiser and learning rate scheduler
-    pinn = PINN().to(device=DEVICE)
+    pinn = PINN(activation=ACTIVATION).to(device=DEVICE)
     optimiser = torch.optim.Adam(params=pinn.parameters(), lr=LEARNING_RATE)
     lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer=optimiser, step_size=SCHEDULER_STEP_SIZE, gamma=SCHEDULER_FACTOR)
 
@@ -150,6 +152,7 @@ for file_index, FILE in enumerate(FILE_NAMES):
             IC_weight=IC_WEIGHT,
             model=pinn,
             initial_state=INITIAL_STATE,
+            device=DEVICE,
             include_controllers=CONTROLLERS
         )
 
@@ -164,11 +167,11 @@ for file_index, FILE in enumerate(FILE_NAMES):
             print(f'Training loss: {loss}')
 
 
-    model_name: str = f'pinn_inertia_{INERTIA.dtype(torch.float64).item()}_damping_{DAMPING.dtype(torch.float64).item()}_power.pth'#_{mechanical_power}.pth'
+    model_name: str = f'pinn_inertia_{INERTIA_DAMPING[0]}_damping_{INERTIA_DAMPING[1]}_power.pth'#_{mechanical_power}.pth'
 
     # Evaluate the trained PINN
     pinn.eval()
-    evaluation_points = torch.tensor(data=times, dtype=torch.float32, requires_grad=True)[:, None]
+    evaluation_points = torch.tensor(data=times, dtype=torch.float32, requires_grad=True).to(device=DEVICE)[:, None]
 
     phase_angle_eval = pinn(data=evaluation_points, initial_state=INITIAL_STATE)
 
@@ -209,12 +212,14 @@ for file_index, FILE in enumerate(FILE_NAMES):
     axes[2].set_ylabel('Physics-based loss $\mathcal{L}_{\mathrm{physics}}$', fontsize=14)
 
     fig.tight_layout(pad=2.0)
-    # plt.show()
+    plt.show()
 
-    if CONTROLLERS:
-        torch.save(obj=pinn, f=ROOT / 'models' / 'pinn' / 'controllers' / model_name)
-        plt.savefig(ROOT / 'data' / 'visualisations' / 'PINN_solutions' / 'controllers' / (FILE.replace('.npz', '.pdf')), format="pdf", bbox_inches="tight")
-    else:
-        torch.save(obj=pinn, f=ROOT / 'models' / 'pinn' / 'no_controllers' / model_name)
-        plt.savefig(ROOT / 'data' / 'visualisations' / 'PINN_solutions' / 'no_controllers' / (FILE.replace('.npz', '.pdf')), format="pdf", bbox_inches="tight")
+    break
+
+    # if CONTROLLERS:
+    #     torch.save(obj=pinn, f=ROOT / 'models' / 'pinn' / 'controllers' / model_name)
+    #     plt.savefig(ROOT / 'data' / 'visualisations' / 'PINN_solutions' / 'controllers' / (FILE.replace('.npz', '.pdf')), format="pdf", bbox_inches="tight")
+    # else:
+    #     torch.save(obj=pinn, f=ROOT / 'models' / 'pinn' / 'no_controllers' / model_name)
+    #     plt.savefig(ROOT / 'data' / 'visualisations' / 'PINN_solutions' / 'no_controllers' / (FILE.replace('.npz', '.pdf')), format="pdf", bbox_inches="tight")
 

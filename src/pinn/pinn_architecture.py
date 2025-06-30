@@ -12,31 +12,41 @@ import torch
 
 
 class PINN(torch.nn.Module):
-    def __init__(self):
+    def __init__(self, activation: str):
         super(PINN, self).__init__()
+        
+        self.activation = activation
+        act_func = None
+
+        if activation.lower() == 'gelu':
+            act_func = torch.nn.GELU
+        elif activation.lower() == 'tanh':
+            act_func = torch.nn.Tanh
+        else:
+            act_func = torch.nn.Sigmoid
 
         # Define PINN architecture
         self.PINN = torch.nn.Sequential(
             torch.nn.Linear(1, 10),
-            torch.nn.GELU(),
+            act_func(),
             torch.nn.Linear(10, 10),
-            torch.nn.GELU(),
+            act_func(),
             torch.nn.Linear(10, 10),
-            torch.nn.GELU(),
+            act_func(),
             torch.nn.Linear(10, 10),
-            torch.nn.GELU(),
+            act_func(),
             torch.nn.Linear(10, 10),
-            torch.nn.GELU(),
+            act_func(),
             torch.nn.Linear(10, 10),
-            torch.nn.GELU(),
+            act_func(),
             torch.nn.Linear(10, 10),
-            torch.nn.GELU(),
+            act_func(),
             torch.nn.Linear(10, 10),
-            # torch.nn.GELU(),
+            # act_func,
             torch.nn.Linear(10, 1, bias=False),
         )
 
-        # Run Xavier weight initialisation and zero-bias
+        # Run Xavier or He weight initialisation and zero-bias
         self.weight_initialiser()
 
     # Define forward propogation function
@@ -50,12 +60,16 @@ class PINN(torch.nn.Module):
 
         return phase_angle_pred
 
-    # For each hidden layer, use Xavier weight initialisation and zero the biases
+    # For each hidden layer, use Xavier or He weight initialisation and zero the biases
     def weight_initialiser(self):
         # Loop through each fully-connected hidden layer
         for module in self.PINN:
+
             if isinstance(module, torch.nn.Linear):
-                torch.nn.init.xavier_uniform_(tensor=module.weight)
+                if self.activation.lower() == 'gelu':
+                    torch.nn.init.kaiming_normal_(tensor=module.weight, nonlinearity='relu')
+                else:
+                    torch.nn.init.xavier_uniform_(tensor=module.weight)
 
                 if module.bias is not None:
                     torch.nn.init.zeros_(module.bias)
