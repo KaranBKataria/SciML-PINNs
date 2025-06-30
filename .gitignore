@@ -1,4 +1,5 @@
 /__pycache__
+/.ruff_cache
 /venv
 .DS_store
 /.DS_store
