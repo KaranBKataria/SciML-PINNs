@@ -28,11 +28,12 @@ import scienceplots
 from loss_functions import *
 from pinn_architecture import PINN
 
-
+# Config matplotlib
 plt.style.use('science')
+plt.rcParams['text.usetex'] = False
 
-# Move tensors and models to GPU (MPS not CUDA for M4 chip)
-# DEVICE: str = torch.device('mps' if torch.backends.mps.is_available() else 'cpu')
+# Move tensors and models to GPU
+# DEVICE: str = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 DEVICE: str = 'cpu'
 
 # Define swing equation constants
@@ -77,7 +78,7 @@ FILE_NAMES: list[str] = listdir(path=PATH)
 
 for file_index, FILE in enumerate(FILE_NAMES):
 
-    print(f"{'-' * 10:^30}File number: {file_index+1}{'-' * 10:^30}")
+    print(f"{'-' * 10:^30}File number: {file_index+1}/{len(FILE_NAMES)}{'-' * 10:^30}")
     # file_name: str = f'inertia_{INERTIA.item()}_damping_{DAMPING.item()}'#_power_{mechanical_power}'
     data = np.load(PATH / FILE)
 
