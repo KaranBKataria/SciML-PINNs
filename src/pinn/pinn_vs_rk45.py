@@ -16,70 +16,74 @@ Supervisor: Dr. Subhash Lakshminarayana
 
 from pathlib import Path
 from os import listdir
-from re import findall
 
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-from tqdm import tqdm
 import scienceplots
-
-from pinn_architecture import PINN
 
 
 # Config matplotlib and define plot constants
-plt.style.use('science')
-plt.rcParams['text.usetex'] = True
+plt.style.use("science")
+plt.rcParams["text.usetex"] = True
 
-CMAP: str = 'plasma'
+CMAP: str = "turbo"
 LEVELS: int = 30
+ACTIVATION: str = "tanh"
 
-INITIAL_STATE: torch.tensor = torch.tensor(data=np.array([0.1, 0.1]), dtype=torch.float64)
+INITIAL_STATE: torch.tensor = torch.tensor(
+    data=np.array([0.1, 0.1]), dtype=torch.float64
+)
 
 # Define directory constants
-ROOT: str = Path.home() / 'Library' / 'CloudStorage' / 'OneDrive-UniversityofWarwick'/ 'dissertation_code'
-PATH_MODEL: str = ROOT / 'models' / 'pinn' / 'no_controllers'
-PATH_RK45: str = ROOT / 'data' / 'numerical_solutions'
+ROOT: str = (
+    Path.home()
+    / "Library"
+    / "CloudStorage"
+    / "OneDrive-UniversityofWarwick"
+    / "dissertation_code"
+)
+PATH_MODEL: str = ROOT / "models" / "pinn" / "no_controllers" / ACTIVATION
+PATH_RK45: str = ROOT / "data" / "numerical_solutions"
 
-PINN_MODELS: list[str] = [file.name for file in PATH_MODEL.glob('*.pth')]#listdir(path=PATH_MODEL)
+PINN_MODELS: list[str] = [
+    file.name for file in PATH_MODEL.glob("*.pth")
+]  # listdir(path=PATH_MODEL)
+
 NUMERICAL_FILE_NAMES: list[str] = listdir(path=PATH_RK45)
-print(PINN_MODELS)
-print(NUMERICAL_FILE_NAMES)
 
 # PINN Hyperparameter constants
-ACTIVATION: str = 'gelu'
-
-HYPERPARAMS = np.load(file=ROOT / 'data' / 'hyperparameter_grid.npy')
+HYPERPARAMS = np.load(file=ROOT / "data" / "hyperparameter_grid.npy")
 
 RMSE_phase_angle: list[float] = []
 RMSE_angular_frequency: list[float] = []
 
-INERTIA: np.array = np.unique(HYPERPARAMS[:,1])
-DAMPING: np.array = np.unique(HYPERPARAMS[:,0])
+INERTIA: np.array = np.unique(HYPERPARAMS[:, 1])
+DAMPING: np.array = np.unique(HYPERPARAMS[:, 0])
 
-for file_index, (numerical_file, model) in enumerate(zip(sorted(NUMERICAL_FILE_NAMES), sorted(PINN_MODELS))):
-
-    # hyperparams = findall(pattern='0.[0-9]+', string=model)
-    # inertia.append(hyperparams[0])
-    # damping.append(hyperparams[1])
+for file_index, (numerical_file, model) in enumerate(
+    zip(sorted(NUMERICAL_FILE_NAMES), sorted(PINN_MODELS))
+):
 
     # Evaluate the trained PINN
-    pinn = torch.load(f=PATH_MODEL / model,
-        map_location=torch.device('cpu'),
-        weights_only=False)
+    pinn = torch.load(
+        f=PATH_MODEL / model, map_location=torch.device("cpu"), weights_only=False
+    )
     pinn.eval()
 
     data = np.load(PATH_RK45 / numerical_file)
 
-    phase_angle_numerical = data['phase_angle']
-    angular_frequency_numerical = data['angular_freq']
+    phase_angle_numerical = data["phase_angle"]
+    angular_frequency_numerical = data["angular_freq"]
 
-    phase_angle_noisy = data['phase_angle_noisy']
-    angular_frequency_noisy = data['angular_freq_noisy']
+    # phase_angle_noisy = data["phase_angle_noisy"]
+    # angular_frequency_noisy = data["angular_freq_noisy"]
 
-    times = data['times']
+    times = data["times"]
 
-    evaluation_points = torch.tensor(data=times, dtype=torch.float32, requires_grad=True)[:, None]
+    evaluation_points = torch.tensor(
+        data=times, dtype=torch.float32, requires_grad=True
+    )[:, None]
 
     phase_angle_eval = pinn(data=evaluation_points, initial_state=INITIAL_STATE)
 
@@ -88,35 +92,88 @@ for file_index, (numerical_file, model) in enumerate(zip(sorted(NUMERICAL_FILE_N
         inputs=evaluation_points,
         grad_outputs=torch.ones_like(phase_angle_eval),
         create_graph=True,
-        retain_graph=True
+        retain_graph=True,
     )[0]
 
-    phase_angle_eval = phase_angle_eval.detach().numpy()
-    angular_frequency_eval = angular_frequency_eval.detach().numpy()
-    evaluation_points = evaluation_points.detach().numpy()
+    phase_angle_eval = phase_angle_eval.detach().numpy().flatten()
+    angular_frequency_eval = angular_frequency_eval.detach().numpy().flatten()
+    evaluation_points = evaluation_points.detach().numpy().flatten()
 
-    testing_RMSE_phase_angle = np.sqrt(np.linalg.norm(x=phase_angle_eval - phase_angle_numerical) ** 2)
+    testing_RMSE_phase_angle = np.sqrt(
+        np.mean((phase_angle_eval - phase_angle_numerical) ** 2)
+    )
     RMSE_phase_angle.append(testing_RMSE_phase_angle)
 
-    testing_RMSE_angular_frequency = np.sqrt(np.linalg.norm(x=angular_frequency_eval - angular_frequency_numerical) ** 2)
+    testing_RMSE_angular_frequency = np.sqrt(
+        np.mean((angular_frequency_eval - angular_frequency_numerical) ** 2)
+    )
     RMSE_angular_frequency.append(testing_RMSE_angular_frequency)
+    
+    print(f'Model: {model}')
+    print(f'Phase angle RMSE: {testing_RMSE_phase_angle}')
+    # if model == "pinn_inertia_0.18_damping_0.05_power.pth":
+    #     fig, axes = plt.subplots(1, 2, figsize=(15, 6))
 
-X, Y = np.meshgrid(INERTIA, DAMPING)
+    #     axes[0].plot(evaluation_points, phase_angle_eval, color='steelblue', label='PINN')
+    #     axes[0].plot(times, phase_angle_numerical, color='red', linestyle='--', label='RK45')
+    #     axes[0].set_xlabel('Time (s)', fontsize=14)
+    #     axes[0].set_ylabel('Phase angle $\delta$ (rad)', fontsize=14)
+    #     axes[0].legend(fontsize=13)
 
-fig, ax = plt.subplots(1, 2)
-ax[0].contourf(X, Y, np.array(RMSE_phase_angle).reshape(6, 6), levels=LEVELS)
-ax[0].set_ylabel('Damping $d$', fontsize=13)
-ax[0].set_xlabel('Inertia $m$', fontsize=13)
-ax[0].set_title('Phase Angle $\delta$', fontsize=13)
+    #     axes[1].plot(evaluation_points, angular_frequency_eval, color='steelblue', label='PINN')
+    #     axes[1].plot(times, angular_frequency_numerical, color='red', linestyle='--', label='RK45')
+    #     axes[1].set_xlabel('Time (s)', fontsize=14)
+    #     axes[1].set_ylabel('Angular frequency $\dot{\delta}$ (rad/s)', fontsize=14)
+    #     axes[1].legend(fontsize=13)
 
-ax[1].contourf(X, Y, np.array(RMSE_angular_frequency).reshape(6, 6), levels=LEVELS)
-ax[1].set_xlabel('Inertia $m$', fontsize=13)
-ax[1].set_title('Angular Frequency $\dot{\delta}$', fontsize=13)
+    #     fig.tight_layout(pad=2.0)
+    #     plt.show()
 
-cbar1 = fig.colorbar(ax[0].contourf(X, Y, np.array(RMSE_phase_angle).reshape(6, 6), levels=LEVELS, cmap=CMAP), ax=ax[0])
-cbar2 = fig.colorbar(ax[1].contourf(X, Y, np.array(RMSE_angular_frequency).reshape(6, 6), levels=LEVELS, cmap=CMAP), ax=ax[1])
 
-# cbar1.set_label(label='RMSE', rotation=270, labelpad=18, fontsize=13)
-cbar2.set_label(label='RMSE', rotation=270, labelpad=18, fontsize=13)
+RMSE_phase_angle = np.array(RMSE_phase_angle).reshape(DAMPING.shape[0], INERTIA.shape[0]).T
+RMSE_angular_frequency = np.array(RMSE_angular_frequency).reshape(DAMPING.shape[0], INERTIA.shape[0]).T
+
+# Define shared colormap limits
+vmin = min(RMSE_phase_angle.min(), RMSE_angular_frequency.min())
+vmax = max(RMSE_phase_angle.max(), RMSE_angular_frequency.max())
+
+# Define tick labels
+INERTIA_LABELS = [str(round(num, 2)) for num in INERTIA]
+DAMPING_LABELS = [str(round(num, 2)) for num in DAMPING]
+
+fig, ax = plt.subplots(1, 2, sharey=True)
+
+heat1 = ax[0].imshow(
+    RMSE_phase_angle,
+    origin='lower',
+    cmap=CMAP,
+    extent=[INERTIA.min(), INERTIA.max(), DAMPING.min(), DAMPING.max()],
+    aspect='auto',
+    vmin=vmin,
+    vmax=vmax
+    )
+ax[0].set_ylabel("Damping $d$", fontsize=13)
+ax[0].set_xlabel("Inertia $m$", fontsize=13)
+ax[0].set_title("Phase Angle $\delta$", fontsize=13)
+ax[0].set_xticks(INERTIA, labels=INERTIA_LABELS)
+ax[0].set_yticks(DAMPING, labels=DAMPING_LABELS)
+
+heat2 = ax[1].imshow(
+    RMSE_angular_frequency,
+    origin='lower',
+    cmap=CMAP,
+    extent=[INERTIA.min(), INERTIA.max(), DAMPING.min(), DAMPING.max()],
+    aspect='auto',
+    vmin=vmin,
+    vmax=vmax
+    )
+ax[1].set_xlabel("Inertia $m$", fontsize=13)
+ax[1].set_title("Angular Frequency $\dot{\delta}$", fontsize=13)
+ax[1].set_xticks(INERTIA, labels=INERTIA_LABELS)
+
+plt.suptitle(f'Activation Function: {ACTIVATION.upper()}', fontsize=13)
+
+cbar = fig.colorbar(heat2, ax=ax.ravel().tolist())
+cbar.set_label(label="RMSE", rotation=270, labelpad=18, fontsize=13)
 
 plt.show()
