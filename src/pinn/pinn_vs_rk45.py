@@ -27,7 +27,7 @@ import scienceplots
 plt.style.use("science")
 plt.rcParams["text.usetex"] = True
 
-CMAP: str = "turbo"
+CMAP: str = "plasma"
 LEVELS: int = 30
 ACTIVATION: str = "tanh"
 
@@ -64,7 +64,6 @@ DAMPING: np.array = np.unique(HYPERPARAMS[:, 0])
 for file_index, (numerical_file, model) in enumerate(
     zip(sorted(NUMERICAL_FILE_NAMES), sorted(PINN_MODELS))
 ):
-
     # Evaluate the trained PINN
     pinn = torch.load(
         f=PATH_MODEL / model, map_location=torch.device("cpu"), weights_only=False
@@ -108,30 +107,16 @@ for file_index, (numerical_file, model) in enumerate(
         np.mean((angular_frequency_eval - angular_frequency_numerical) ** 2)
     )
     RMSE_angular_frequency.append(testing_RMSE_angular_frequency)
-    
-    print(f'Model: {model}')
-    print(f'Phase angle RMSE: {testing_RMSE_phase_angle}')
-    # if model == "pinn_inertia_0.18_damping_0.05_power.pth":
-    #     fig, axes = plt.subplots(1, 2, figsize=(15, 6))
 
-    #     axes[0].plot(evaluation_points, phase_angle_eval, color='steelblue', label='PINN')
-    #     axes[0].plot(times, phase_angle_numerical, color='red', linestyle='--', label='RK45')
-    #     axes[0].set_xlabel('Time (s)', fontsize=14)
-    #     axes[0].set_ylabel('Phase angle $\delta$ (rad)', fontsize=14)
-    #     axes[0].legend(fontsize=13)
+    print(f"Model: {model}")
+    print(f"Phase angle RMSE: {testing_RMSE_phase_angle}")
 
-    #     axes[1].plot(evaluation_points, angular_frequency_eval, color='steelblue', label='PINN')
-    #     axes[1].plot(times, angular_frequency_numerical, color='red', linestyle='--', label='RK45')
-    #     axes[1].set_xlabel('Time (s)', fontsize=14)
-    #     axes[1].set_ylabel('Angular frequency $\dot{\delta}$ (rad/s)', fontsize=14)
-    #     axes[1].legend(fontsize=13)
-
-    #     fig.tight_layout(pad=2.0)
-    #     plt.show()
-
-
-RMSE_phase_angle = np.array(RMSE_phase_angle).reshape(DAMPING.shape[0], INERTIA.shape[0]).T
-RMSE_angular_frequency = np.array(RMSE_angular_frequency).reshape(DAMPING.shape[0], INERTIA.shape[0]).T
+RMSE_phase_angle = (
+    np.array(RMSE_phase_angle).reshape(DAMPING.shape[0], INERTIA.shape[0]).T
+)
+RMSE_angular_frequency = (
+    np.array(RMSE_angular_frequency).reshape(DAMPING.shape[0], INERTIA.shape[0]).T
+)
 
 # Define shared colormap limits
 vmin = min(RMSE_phase_angle.min(), RMSE_angular_frequency.min())
@@ -145,13 +130,13 @@ fig, ax = plt.subplots(1, 2, sharey=True)
 
 heat1 = ax[0].imshow(
     RMSE_phase_angle,
-    origin='lower',
+    origin="lower",
     cmap=CMAP,
     extent=[INERTIA.min(), INERTIA.max(), DAMPING.min(), DAMPING.max()],
-    aspect='auto',
+    aspect="auto",
     vmin=vmin,
-    vmax=vmax
-    )
+    vmax=vmax,
+)
 ax[0].set_ylabel("Damping $d$", fontsize=13)
 ax[0].set_xlabel("Inertia $m$", fontsize=13)
 ax[0].set_title("Phase Angle $\delta$", fontsize=13)
@@ -160,18 +145,18 @@ ax[0].set_yticks(DAMPING, labels=DAMPING_LABELS)
 
 heat2 = ax[1].imshow(
     RMSE_angular_frequency,
-    origin='lower',
+    origin="lower",
     cmap=CMAP,
     extent=[INERTIA.min(), INERTIA.max(), DAMPING.min(), DAMPING.max()],
-    aspect='auto',
+    aspect="auto",
     vmin=vmin,
-    vmax=vmax
-    )
+    vmax=vmax,
+)
 ax[1].set_xlabel("Inertia $m$", fontsize=13)
 ax[1].set_title("Angular Frequency $\dot{\delta}$", fontsize=13)
 ax[1].set_xticks(INERTIA, labels=INERTIA_LABELS)
 
-plt.suptitle(f'Activation Function: {ACTIVATION.upper()}', fontsize=13)
+plt.suptitle(f"Activation Function: {ACTIVATION.upper()}", fontsize=13)
 
 cbar = fig.colorbar(heat2, ax=ax.ravel().tolist())
 cbar.set_label(label="RMSE", rotation=270, labelpad=18, fontsize=13)
