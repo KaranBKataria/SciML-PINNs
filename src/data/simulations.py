@@ -20,11 +20,12 @@ from tqdm import tqdm
 
 from ODE_numerical_solver import *
 
-# Load in the grid of hyperparameters
-hyperparameter_grid = np.load(file=PATH / "hyperparameter_grid.npy")
 
 # Set style of plots to scientific
 plt.style.use("science")
+
+# Load in the grid of hyperparameters
+hyperparameter_grid = np.load(file=PATH / "hyperparameter_grid.npy")
 
 # Set up the input arguements (these follow the paper 'Physics-Informed Neural Networks for Power Systems')
 TIMESTEP = 0.1

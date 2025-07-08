@@ -9,23 +9,43 @@ Work: MSc thesis
 Supervisor: Dr. Subhash Lakshminarayana
 """
 
-# Import in all required packages and functions
+from typing import NamedTuple, Callable
+
 import torch
 import numpy as np
-from tqdm import tqdm
+
+
+class SwingEquationInputs(NamedTuple):
+    phase_angle: torch.Tensor
+    angular_frequency: torch.Tensor
+    angular_acceleration: torch.Tensor
+    inertia: torch.Tensor
+    damping: torch.Tensor
+    mechanical_power: torch.Tensor
+    voltage_magnitude: torch.Tensor
+    voltages: torch.Tensor
+    phase_angles: torch.Tensor
+    susceptances: torch.Tensor
+    controller_proportional: torch.Tensor
+    controller_integral: torch.Tensor
 
 
 # Define all loss functions
-def data_loss_mse(pred: np.array, ground_truth: np.array) -> float:
+def data_loss_mse(pred: np.ndarray, ground_truth: np.ndarray) -> float:
     """
-    This function computes the data-driven loss for a single training sample.
+    Computes the data-driven loss for a single training sample.
 
-        Inputs:
-                pred: The (modified) prediction of the PINN
-                ground_truth: The ground truth vector from the training set
+    Parameters
+    ----------
+    pred : np.ndarray
+        PINN prediction.
+    ground_truth : np.ndarray
+        Ground truth vector from the training set.
 
-        Outputs:
-                error: The loss for a single training sample
+    Returns
+    -------
+    error : float
+        Loss for a single training sample.
     """
 
     # Compute the square of the l2 norm between the prediction and the ground
@@ -36,51 +56,43 @@ def data_loss_mse(pred: np.array, ground_truth: np.array) -> float:
 
 
 def physics_based_loss(
-    phase_angle: torch.tensor,
-    angular_frequency: torch.tensor,
-    angular_acceleration: torch.tensor,
-    inertia: torch.tensor,
-    damping: torch.tensor,
-    mechanical_power: torch.tensor,
-    voltage_magnitude: torch.tensor,
-    voltages: torch.tensor,
-    phase_angles: torch.tensor,
-    susceptances: torch.tensor,
-    include_controllers: bool = False,
-    **kwargs,
+    swing_inputs: SwingEquationInputs, include_controllers: bool = False
 ) -> float:
     """
-    This function computes the physics-based regularisation term for a single training example.
+    Computes ODE residual regularisation term for a single training example.
 
-        Inputs:
-                phase_angle: The (modified) phase angle prediction of the PINN
-                angular_frequency: The gradient of the (modified) phase angle prediction of the PINN
-                angular_acceleration: The second-order time derivative of the phase angle - obtained
-                      via automatic differenciation
-                include_controllers: Boolean arguement to determine whether or not controllers should be included
-                **kwargs: The controller coefficients (integral and proportional)
+    Parameters
+    ----------
+    swing_inputs : NamedTuple
+        NamedTuple of ODE parameters, solution and deriatives
+    include_controllers : bool
+        Boolean arguement to determine whether or not controllers should be included
 
-        Outputs:
-                error: The physics-based loss for a single training example
+    Returns
+    -------
+    error: The physics-based loss for a single training example
     """
 
     # Compute the total electrical power output generator k supplies to the grid
     total_electrical_output = 0
-    for v, delta, B in zip(voltages, phase_angles, susceptances):
+    for v, delta, B in zip(
+        swing_inputs.voltages, swing_inputs.phase_angles, swing_inputs.susceptances
+    ):
         total_electrical_output += (
-            B * voltage_magnitude * v * torch.sin(phase_angle - delta)
+            B
+            * swing_inputs.voltage_magnitude
+            * v
+            * torch.sin(swing_inputs.phase_angle - delta)
         )
 
     # Compute the cost based on whether or not PI controllers are accounted for
     if include_controllers:
-        controller_proportional = kwargs["controller_proportional"]
-        controller_integral = kwargs["integral"]
-
         cost: float = (
-            (inertia * angular_acceleration)
-            + (damping - controller_proportional) * angular_frequency
+            (swing_inputs.inertia * swing_inputs.angular_acceleration)
+            + (swing_inputs.damping - swing_inputs.controller_proportional)
+            * swing_inputs.angular_frequency
             + total_electrical_output
-            - (controller_integral * phase_angle)
+            - (swing_inputs.controller_integral * swing_inputs.phase_angle)
         )
 
         # No **2 to prevent invoking expensive microcode in each iteration of the training
@@ -89,10 +101,10 @@ def physics_based_loss(
 
     else:
         cost: float = (
-            (inertia * angular_acceleration)
-            + (damping * angular_frequency)
+            (swing_inputs.inertia * swing_inputs.angular_acceleration)
+            + (swing_inputs.damping * swing_inputs.angular_frequency)
             + total_electrical_output
-            - mechanical_power
+            - swing_inputs.mechanical_power
         )
 
         # No **2 to prevent invoking expensive microcode in each iteration of the training
@@ -100,18 +112,24 @@ def physics_based_loss(
         return error
 
 
-def IC_based_loss(model, initial_state: torch.tensor, device: str) -> float:
+def IC_based_loss(model: Callable, initial_state: torch.Tensor, device: str) -> float:
     """
-    This function defines the IC regularisation term to ensure the training
-    proceedure enforces the satisfaction of the pre-specified ICs.
+    Computes IC loss/regularisation term for pre-specified ICs
+    for a single training example.
 
-        Inputs:
-                initial_pred: The PINN prediction at t = 0
-                initial_states: The pre-specified initial state of the system
-                device: The device to move the tensors to (CPU or GPU)
+    Parameters
+    ----------
+    model : Callable
+        The PINN
+    initial_states : torch.Tensor
+        Pre-specified initial state of the system
+    device : str
+        Device to move the tensors to (CPU or GPU)
 
-        Output:
-                error: The IC-based loss for a single training example
+    Returns
+    -------
+    error : float
+        IC-based loss for a single training example
     """
 
     # Compute the square of the l2 norm between the PINN prediction at t=0 and the
@@ -137,66 +155,53 @@ def IC_based_loss(model, initial_state: torch.tensor, device: str) -> float:
 
 
 def total_loss(
-    phase_angle: torch.tensor,
-    angular_frequency: torch.tensor,
-    angular_acceleration: torch.tensor,
-    inertia: torch.tensor,
-    damping: torch.tensor,
-    mechanical_power: torch.tensor,
-    voltage_magnitude: torch.tensor,
-    voltages: torch.tensor,
-    phase_angles: torch.tensor,
-    susceptances: torch.tensor,
+    swing_inputs: SwingEquationInputs,
     physics_weight: float,
     IC_weight: float,
-    model,
-    initial_state: torch.tensor,
+    model: Callable,
+    initial_state: torch.Tensor,
     device: str,
     include_controllers: bool = False,
-    **kwargs,
 ) -> float:
     """
     This function computes the total loss for a single training example, which is composed of the
     data-driven loss, the physics-based regularisation term and the initial condition regularisation
     term.
 
-        Inputs:
-                pred: The prediction of the PINN
-                initial_pred: The PINN prediction at t = 0
-                ground_truth: The ground truth vector from the training set
-                initial_state: The pre-specified initial state of the system
-                angular_acceleration: The second-order time derivative of the phase angle - obtained
-                    via automatic differenciation
-                physics_weight: The regularisation weight on the physics-based regularisation term
-                IC_weight: The regularisation weight on the initial conditions regularisation term
-                include_controllers: Boolean arguement to determine whether or not controllers should be included
-                **kwargs: The controller coefficients (integral and proportional)
+    Parameters
+    ----------
+    swing_inputs : NamedTuple
+        NamedTuple of ODE parameters, solution and deriatives
+    model : Callable
+        The PINN
+    initial_state : torch.Tensor
+        Pre-specified initial state of the system
+    device : str
+        Device to move the tensors to (CPU or GPU)
+    physics_weight : float
+        The regularisation weight on the physics-based regularisation term
+    IC_weight : float
+        The regularisation weight on the initial conditions regularisation term
+    include_controllers : bool
+        Boolean arguement to determine whether or not controllers should be included
 
-        Output:
-                total_loss: The total loss for a single training example
+    Returns
+    -------
+    total_loss : float
+        Total loss for a single training example
     """
-    assert physics_weight >= 0 or IC_weight >= 0, (
-        "Regularisation penalty weights must be non-negative"
-    )
+    assert physics_weight >= 0 or IC_weight >= 0, "Regularisation penalty weights must be non-negative"
 
     # Obtain the loss values for each component
     # data_loss: float = data_loss_mse(pred, ground_truth)
     physics_loss: float = physics_based_loss(
-        phase_angle=phase_angle,
-        angular_frequency=angular_frequency,
-        angular_acceleration=angular_acceleration,
-        inertia=inertia,
-        damping=damping,
-        mechanical_power=mechanical_power,
-        voltage_magnitude=voltage_magnitude,
-        voltages=voltages,
-        phase_angles=phase_angles,
-        susceptances=susceptances,
+        swing_inputs=swing_inputs,
         include_controllers=include_controllers,
-        **kwargs,
     )
 
-    IC_loss: float = IC_based_loss(model=model, initial_state=initial_state, device=device)
+    IC_loss: float = IC_based_loss(
+        model=model, initial_state=initial_state, device=device
+    )
 
     # Aggregate the components and scale by the regularisation weights
     total_loss: float = (physics_weight * physics_loss) + (IC_weight * IC_loss)

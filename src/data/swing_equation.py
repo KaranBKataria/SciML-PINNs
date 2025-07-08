@@ -8,13 +8,22 @@ Work: MSc thesis
 Supervisor: Dr. Subhash Lakshminarayana
 """
 
-# Import in the required functions 
-import numpy as np 
+# Import in the required functions
+import numpy as np
+
 
 def swing_equation(
-        inertia: float, damping: float, state: np.array,
-        mechanical_power: float, voltage_magnitude: float, include_controllers: bool,
-        voltages: np.array, phase_angles: np.array, susceptances: np.array, **kwargs) -> np.array:
+    inertia: float,
+    damping: float,
+    state: np.ndarray,
+    mechanical_power: float,
+    voltage_magnitude: float,
+    include_controllers: bool,
+    voltages: np.ndarray,
+    phase_angles: np.ndarray,
+    susceptances: np.ndarray,
+    **kwargs,
+) -> np.ndarray:
     """
     This function defines the swing equation for a given generator, including
     and exluding controllers, and returns a system of first order ODEs to be
@@ -39,32 +48,40 @@ def swing_equation(
 
     # Extract the phase angle and angular frequencies from the state vector
     phase_angle = state[0]
-    angular_frequency = state[1] 
-    
+    angular_frequency = state[1]
+
     # Compute the total electrical power output generator k supplies to the grid
     total_electrical_output = 0
     for v, delta, B in zip(voltages, phase_angles, susceptances):
-        total_electrical_output += B * voltage_magnitude * v * np.sin(phase_angle - delta)
+        total_electrical_output += (
+            B * voltage_magnitude * v * np.sin(phase_angle - delta)
+        )
 
     # Define dummy variables for converting second-order ODE to system of first order ODEs
     eta_1 = phase_angle
     eta_2 = angular_frequency
-    
+
     eta_1_dot = eta_2
-    
+
     # If controllers should be included, return the system of 1st order ODEs with controller coefficients
     if include_controllers:
-        controller_proportional = kwargs['controller_proportional']
-        controller_integral = kwargs['controller_integral']
-        
-        eta_2_dot = (1 / inertia) * (controller_integral * phase_angle - total_electrical_output - (damping - controller_proportional) * angular_frequency)
+        controller_proportional = kwargs["controller_proportional"]
+        controller_integral = kwargs["controller_integral"]
+
+        eta_2_dot = (1 / inertia) * (
+            controller_integral * phase_angle
+            - total_electrical_output
+            - (damping - controller_proportional) * angular_frequency
+        )
 
         # Return a system of first-order ODEs
         return np.array([eta_1_dot, eta_2_dot])
 
     # Else return the system of 1st order ODEs without any controller coefficients
     else:
-        eta_2_dot = (1 / inertia) * (mechanical_power - total_electrical_output - damping * angular_frequency) 
+        eta_2_dot = (1 / inertia) * (
+            mechanical_power - total_electrical_output - damping * angular_frequency
+        )
 
         # Return a system of first-order ODEs
         return np.array([eta_1_dot, eta_2_dot])
