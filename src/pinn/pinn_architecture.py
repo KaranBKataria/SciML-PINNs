@@ -52,7 +52,7 @@ class PINN(torch.nn.Module):
         self.weight_initialiser()
 
     # Define forward propogation function
-    def forward(self, data: torch.Tensor, initial_state: torch.Tensor) -> torch.Tensor:
+    def forward(self, data: torch.Tensor, initial_state: torch.Tensor=None) -> torch.Tensor:
         # initial_phase_angle = initial_state[0]
         # initial_angular_frequency = initial_state[1]
 
@@ -80,3 +80,6 @@ class PINN(torch.nn.Module):
 
                 if module.bias is not None:
                     torch.nn.init.zeros_(module.bias)
+
+if __name__ == '__main__':
+    pass

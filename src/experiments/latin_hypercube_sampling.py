@@ -30,7 +30,7 @@ fig, ax = plt.subplots(
 
 # Loop through different sample sizes for the collocation points and compare
 # LHS and vanilla uniform random sampling of the temporal domain [0, 20]
-for n_sample, index in zip(range(10, 30, 5), range(0, 4)):
+for n_sample, index in zip(range(1000, 6000, 1000), range(0, 4)):
     # Obtain vanilla uniform random samples of size n_sample
     rand_samples = np.random.uniform(0, 20, size=n_sample)
 
@@ -48,7 +48,7 @@ for n_sample, index in zip(range(10, 30, 5), range(0, 4)):
         marker=".",
         label="$N_{\mathcal{C}}$" + f"={n_sample} (LHS)",
     )
-    ax[index][0].legend(fontsize=10)
+    ax[index][0].legend(fontsize=12)
 
     # Plot the uniform random samples
     ax[index][1].scatter(
@@ -58,12 +58,12 @@ for n_sample, index in zip(range(10, 30, 5), range(0, 4)):
         color="red",
         label="$N_{\mathcal{C}}$" + f"={n_sample} (random)",
     )
-    ax[index][1].legend(fontsize=10)
+    ax[index][1].legend(fontsize=12)
 
     # Only add x-axis label on the last row of subplots
     if index == 3:
-        ax[index][0].set_xlabel("Temporal domain, $\mathcal{T}$", fontsize=10)
-        ax[index][1].set_xlabel("Temporal domain, $\mathcal{T}$", fontsize=10)
+        ax[index][0].set_xlabel("Temporal domain ($\mathcal{T}$)", fontsize=12)
+        ax[index][1].set_xlabel("Temporal domain ($\mathcal{T}$)", fontsize=12)
 
 # Ensure tight orientation of subplots
 plt.subplots_adjust()

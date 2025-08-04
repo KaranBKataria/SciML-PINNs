@@ -61,8 +61,8 @@ NUMERICAL_FILE_NAMES: list[str] = listdir(path=PATH_RK45)
 
 # Extract PINN Hyperparameter constants
 HYPERPARAMS = np.load(file=ROOT / "data" / "hyperparameter_grid.npy")
-INERTIA: np.array = np.unique(HYPERPARAMS[:, 1])
-DAMPING: np.array = np.unique(HYPERPARAMS[:, 0])
+INERTIA: np.ndarray = np.unique(HYPERPARAMS[:, 1])
+DAMPING: np.ndarray = np.unique(HYPERPARAMS[:, 0])
 
 # Define tick labels
 INERTIA_LABELS: list[str] = [str(round(num, 2)) for num in INERTIA]

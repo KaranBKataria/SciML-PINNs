@@ -1,9 +1,16 @@
+# Ignore all cache files (bytecode, ruff etc.)
 */__pycache__
+src/pinn/__pycache__
+src/data/__pycache__
 */.ruff_cache
 */.mypy_cache
+.mypy_cache
+.ruff_cache
+
+# Ignore virtual enviroment and MacOS-specific hidden directories
 /venv
 .DS_store
 /.DS_store
-.mypy_cache
-.ruff_cache
+
+# Ignore Python project config
 pyproject.toml

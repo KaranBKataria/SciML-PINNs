@@ -31,28 +31,29 @@ class SwingEquationInputs(NamedTuple):
 
 
 # Define all loss functions
-def data_loss_mse(pred: np.ndarray, ground_truth: np.ndarray) -> float:
+def l2_error(pred: torch.Tensor, ground_truth: torch.Tensor, dim: int = 1) -> tuple[torch.Tensor, torch.Tensor]:
     """
-    Computes the data-driven loss for a single training sample.
+    Computes the per-sample L2 absolute and relative test errors.
 
     Parameters
     ----------
-    pred : np.ndarray
-        PINN prediction.
-    ground_truth : np.ndarray
+    pred : torch.Tensor
+        PINN prediction for the phase angle (PINN) and angular frequency (AD).
+    ground_truth : torch.Tensor
         Ground truth vector from the training set.
 
     Returns
     -------
-    error : float
+    l2_abs : torch.Tensor
         Loss for a single training sample.
+    l2_rel : torch.Tensor
     """
-
     # Compute the square of the l2 norm between the prediction and the ground
     # truth, obtaining a single error
-    error: float = np.linalg.norm(x=pred - ground_truth) ** 2
-
-    return error
+    l2_abs: float = torch.norm(input=pred - ground_truth, dim=dim)
+    l2_rel = l2_abs / torch.norm(input=ground_truth, dim=dim)
+    
+    return torch.mean(l2_abs), torch.mean(l2_rel)
 
 
 def physics_based_loss(
@@ -207,3 +208,26 @@ def total_loss(
     total_loss: float = (physics_weight * physics_loss) + (IC_weight * IC_loss)
 
     return total_loss
+
+def loss_closure(
+    swing_inputs: SwingEquationInputs,
+    physics_weight: float,
+    IC_weight: float,
+    model: Callable,
+    initial_state: torch.Tensor,
+    device: str,
+    include_controllers: bool = False,
+    ) -> float:
+    
+    def loss_function(inputs: torch.Tensor, targets: torch.Tensor) -> float:
+        return total_loss(
+            swing_inputs=swing_inputs,
+            physics_weight=physics_weight,
+            IC_weight=IC_weight,
+            model=model,
+            initial_state=initial_state,
+            device=device,
+            include_controllers=include_controllers,
+            )
+    
+    return loss_function

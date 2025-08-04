@@ -36,7 +36,6 @@ def swing_ODEs_solver(
     initial_state: np.ndarray,
     final_time: float,
     timestep: float,
-    sigma: np.ndarray,
     inertia: float,
     damping: float,
     mechanical_power: float,
@@ -47,6 +46,7 @@ def swing_ODEs_solver(
     susceptances: np.ndarray,
     file_name: str,
     save_output_to_file: bool = False,
+    noise: float = 0.01,
     **kwargs,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
@@ -63,7 +63,6 @@ def swing_ODEs_solver(
                 initial_state: The initial state of the ODEs
                 final_time: The final time of the numerical solution
                 timestep: The timestep between numerical solutions
-                sigma: A covariance vector to produce a diagonal covariance matrix for Gaussian noise
                 inertia: The inertia coefficient for the given generator
                 damping: The damping coefficient for the given generator
                 mechanical_power: The mechanical power being supplied to the generator (p.u.)
@@ -118,13 +117,12 @@ def swing_ODEs_solver(
     num_states = solution.shape[0]
     num_evals = solution.shape[1]
 
-    gaussian_noise = np.random.multivariate_normal(
-        mean=np.zeros(shape=num_states),
-        cov=sigma * sigma * np.eye(N=num_states),
-        size=num_evals,
-    )
+    gaussian_noise = np.random.randn(num_states, num_evals)
 
-    solution_noise = solution + gaussian_noise.T
+    assert gaussian_noise.shape == solution.shape
+
+    # Append uncorrelated noise% Gaussian noise as in Raissi et al. 2019
+    solution_noise = solution + noise * np.std(solution) * gaussian_noise
 
     # If True, save output .npz file at the specified absolute path
     if save_output_to_file:
@@ -146,14 +144,18 @@ if __name__ == "__main__":
     This section defines an arbitrary test case to test the numerical solver functionality.
     """
 
+    np.random.seed(10)
+
     plt.style.use("science")
+
+    TRAIN_TEST_SPLIT = 0.3
 
     # Set up the input arguements (these follow the paper 'Physics-Informed Neural Networks for Power Systems')
     timestep = 0.1
     final_time = 20.0
-    inertia = 0.2
-    damping = 0.1
-    mechanical_power = 0.1
+    inertia = 0.25
+    damping = 0.15
+    mechanical_power = 0.13
     voltage = 1.0
 
     voltages = np.array([1.0])
@@ -164,21 +166,17 @@ if __name__ == "__main__":
     initial_state = np.array([0.1, 0.1])
     initial_time = 0
 
-    # Set the covariance matrix to be isotropic
-    sigma = np.array([0.02, 0.02])
-
     # Obtain numerical solutions (true and noisy) along with times
     solution, solution_noisy, times = swing_ODEs_solver(
         initial_time=initial_time,
         initial_state=initial_state,
         final_time=final_time,
         timestep=timestep,
-        sigma=sigma,
         inertia=inertia,
         damping=damping,
         mechanical_power=mechanical_power,
         voltage_magnitude=voltage,
-        include_controllers=True,
+        include_controllers=False,
         voltages=voltages,
         phase_angles=phase_angles,
         susceptances=susceptances,
@@ -188,29 +186,57 @@ if __name__ == "__main__":
         controller_integral=0.1,
     )
 
+    # Define number of total data points from numerical solution, N
+    N: int = int((final_time - initial_time)/(timestep) + 1)
+
+    N_D: int = int(np.ceil(len(times)*TRAIN_TEST_SPLIT))
+
+    rand_index = np.random.choice(np.arange(1, N, 1), replace=False, size=N_D)
+    rand_index = np.append(rand_index, 0)
+
+    training_data = np.array([solution_noisy[:, idx] for idx in rand_index])
+    training_times = np.array([times[idx] for idx in rand_index])
+
     # Plot the transient dynamics of the phase angle and angular velocity
     fig, ax = plt.subplots(1, 2)
 
     ax[0].plot(
-        times, solution[0, :], linestyle="-.", color="red", label="True dynamics"
+        times, solution[0, :], linestyle="--", color="black", label="True dynamics"
     )
-    ax[0].plot(
-        times, solution_noisy[0, :], linestyle=":", color="blue", label="Noisy dynamics"
+    ax[0].scatter(
+        times, solution_noisy[0, :], color="blue", label="Noisy dynamics", marker='.', alpha=0.5, s=45
     )
+
+    ax[0].scatter(
+        training_times, training_data[:, 0], color='red', label="Training data", marker='x', s=70
+    )
+
     ax[0].legend(fontsize=15)
     ax[0].grid()
     ax[0].set_xlabel("Time (s)", fontsize=15)
     ax[0].set_ylabel("Phase Angle $\delta$ (rad)", fontsize=15)
 
     ax[1].plot(
-        times, solution[1, :], linestyle="-.", color="red", label="True dynamics"
+        times, solution[1, :], linestyle="--", color="black", label="True dynamics"
     )
-    ax[1].plot(
-        times, solution_noisy[1, :], linestyle=":", color="blue", label="Noisy dynamics"
+    ax[1].scatter(
+        times, solution_noisy[1, :], color="blue", label="Noisy dynamics", marker='.', alpha=0.5, s=45
     )
-    ax[1].legend(fontsize=15)
+
+    ax[1].scatter(
+        training_times, training_data[:, 1], color='red', label="Training data", marker='x', s=70
+    )
+
+    ax[1].legend(loc="best", fontsize=15)
     ax[1].grid()
     ax[1].set_xlabel("Time (s)", fontsize=15)
     ax[1].set_ylabel("Angular Frequency $\dot{\delta}$ (rad/s)", fontsize=15)
+
+    plt.suptitle("$N_{\mathcal{D}}=$" + f" {N_D}", fontsize=17)
+
+    PATH_TO_IM_DIR: str = "/Users/karankataria/Library/CloudStorage/OneDrive-UniversityofWarwick"\
+                        f"/dissertation_code/data/visualisations/experiments/"
+
+    # plt.savefig(fname=PATH_TO_IM_DIR+"data_generation_example_seed_10.pdf", format="pdf", bbox_inches="tight")
 
     plt.show()
