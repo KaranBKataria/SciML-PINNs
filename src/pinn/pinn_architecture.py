@@ -14,7 +14,7 @@ class PINN(torch.nn.Module):
     """
     Class to define Physics-Informed Neural Network (PINN).
     """
-    def __init__(self, activation: str):
+    def __init__(self, activation: str, hidden_units: int = 10):
         super(PINN, self).__init__()
 
         self.activation = activation
@@ -29,23 +29,23 @@ class PINN(torch.nn.Module):
 
         # Define PINN architecture
         self.PINN = torch.nn.Sequential(
-            torch.nn.Linear(1, 10),
+            torch.nn.Linear(1, hidden_units),
             act_func(),
-            torch.nn.Linear(10, 10),
+            torch.nn.Linear(hidden_units, hidden_units),
             act_func(),
-            torch.nn.Linear(10, 10),
+            torch.nn.Linear(hidden_units, hidden_units),
             act_func(),
-            torch.nn.Linear(10, 10),
+            torch.nn.Linear(hidden_units, hidden_units),
             act_func(),
-            torch.nn.Linear(10, 10),
+            torch.nn.Linear(hidden_units, hidden_units),
             act_func(),
-            torch.nn.Linear(10, 10),
+            torch.nn.Linear(hidden_units, hidden_units),
             act_func(),
-            torch.nn.Linear(10, 10),
+            torch.nn.Linear(hidden_units, hidden_units),
             act_func(),
-            torch.nn.Linear(10, 10),
+            torch.nn.Linear(hidden_units, hidden_units),
             # act_func,
-            torch.nn.Linear(10, 1, bias=False),
+            torch.nn.Linear(hidden_units, 1, bias=False),
         )
 
         # Run Xavier or He weight initialisation and zero-bias
