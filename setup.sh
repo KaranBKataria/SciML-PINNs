@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-#!/usr/bin/env zsh
 
 # Create virtual enviroment to prevent clashing dependencies
 python3 -m venv venv
